@@ -1,0 +1,71 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+
+  - name: "Extra data for success manage email SW"
+    set_fact:
+      extra_data: |
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Hostname:</td>
+          <td>&nbsp;{{ hostname }}</td>
+        </tr>
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Oracle Version:</td>
+          <td>&nbsp;{{ oracle_version }}</td>
+        </tr>
+    when:
+      - status_email == "success"
+      - action == "installsw"
+
+
+  - name: "Extra data for success manage email DB"
+    set_fact:
+      extra_data: |
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Hostname:</td>
+          <td>&nbsp;{{ hostname }}</td>
+        </tr>
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Database Name:</td>
+          <td>&nbsp;{{ DbName }}</td>
+        </tr>
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Port:</td>
+          <td>&nbsp;{{ Port }}</td>
+        </tr>
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Environment:</td>
+          <td>&nbsp;{{ Environment }}</td>
+        </tr>
+    when:
+      - status_email == "success"
+      - action == "createdb"  or action == "full"
+
+  - name: "Extra data for success manage email Prepare"
+    set_fact:
+      extra_data: |
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Hostname:</td>
+          <td>&nbsp;{{ hostname }}</td>
+        </tr>
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Database Name:</td>
+          <td>&nbsp;{{ DbName }}</td>
+        </tr>
+        <tr>
+          <td scope="row" width="35%" align="left">&nbsp;Environment:</td>
+          <td>&nbsp;{{ Environment }}</td>
+        </tr>
+    when:
+      - status_email == "success"
+      - action == "prepare"
+
+  - debug: var=snow_desc
+
+  - debug: var=description
+
+  - name: "include role send email"
+    include_role:
+      name: ansible-role-gis-email

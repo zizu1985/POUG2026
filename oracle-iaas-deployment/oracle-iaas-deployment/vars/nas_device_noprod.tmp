@@ -1,0 +1,11 @@
+dc1.example.com server1.dc1.example.com:/nfsds0012
+dc2.example.com server1.dc2.example.com::/ifs/data/ACSDS01
+dc3.example.com server1.dc3.example.com:/nfdg1/nfsds0013qt01
+dc4.example.com server1.dc4.example.com:/Oracle_backup_d
+dc5.example.com server1.dc5.example.com:/xde/data_i/ACSDS02
+dc5.example.com server2.dc5.example.com:/asd_oracle_bck_non_prod/vnfs0017qt02
+dc6.example.com server1.example.com:/asd_oracle_bck_non_prod/vnfs0017qt03
+dc7.example.com server1.example.com:/ora_bkp_nonprod
+dc8.example.com server1.example.com:/fsi/backups/p00/ora_p0_bkp/nonprod
+dcmain1.example.com cohesity
+dcmain2.example.com cohesity

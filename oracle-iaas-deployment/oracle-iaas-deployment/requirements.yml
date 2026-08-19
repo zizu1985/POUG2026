@@ -1,0 +1,20 @@
+---
+# Prepare server
+- src: git+https://example.com/os/linux/ansible/roles/ansible-role-environment_preparation-oracle.git
+  version: 2.1.1
+  name: ansible-role-environment_preparation-oracle
+
+# Install software
+- src: git+https://example.com/databases/oracle/orchestrate/ansible-playbook_oracle_soft_install.git
+  version: 1.0.3
+  name: ansible-playbook_oracle_soft_install
+
+# Create database
+- src: git+https://example.com/databases/oracle/orchestrate/ansible-playbook_oracle_db_create.git
+  version: 1.0.3
+  name: ansible-playbook_oracle_db_create
+  
+- src: git+https://example.com/databases/snow_launcher/mail/ansible-role-gis-email.git
+  scm: git
+  version: 1.1.0
+  name: ansible-role-gis-email

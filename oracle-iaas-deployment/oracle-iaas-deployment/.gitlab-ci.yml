@@ -1,0 +1,1078 @@
+  ############################### DEFAULT KEYWORDS #######################################################
+  default:
+    image: registry.example.com/databases/databases-runner-images:2.14.8
+    tags:
+      - linux
+      - on-prem
+      - amd64
+
+  ################################# (GLOBAL VARS) INPUT VARS #############################################
+
+
+
+  variables:
+    # General
+    PY_COLORS:                     '1'
+    ANSIBLE_FORCE_COLOR:           '1'
+    LC_ALL:                        C.UTF-8
+    SSH_USERNAME:                  oracle
+    ci_default:                    'false'
+
+    # Jenkins vars
+    TEST_RUN:                      'false'
+    shared:                        ''
+    prepare:                       'false'
+    error_env_preparation:         'false'
+    error_nfs:                     'false'
+    error_db_creation:             'false'
+    error_db_sw:                   'false'
+    error_db_exist:                'false'
+    success_db_creation:           'false'
+    nologic_monitor:               'false'
+    level_support_status:          'noprod'
+    ora_username:                  'jboss'
+    ora_password:                  'jboss'
+    lmpassword:                    'AsF2M0n1t0r$$'
+    nas_device:                    ''
+    fail_error_message:            '[HaaS-INF-jks-#10000#] Code finished successfully.'
+    failure_error_code:            10000
+    allowduplicates:               ''
+    ci_Sys_Id:                     ''
+    original_fail_error_message:   ''
+    itsmChange:                    ''
+    incidentID:                    ''
+    success_email_notification:    'team@example.com'
+    error_email_notification:      'team@example.com'
+
+    # Jenkins param vars
+    build_nfs_JKpath:              'DCAAS/auto-manage-filesystem/3.4.1'
+    prep_role_version:             '2.3.1'
+    oracle_env_prep_version:       '1.2.1'
+    role_manage_fs_version:        '2.4.6'
+    default_db_name:               'TEMP'
+    default_server:                'horse14s.dcmain1.example.com'
+    server:                        'horse14s.dcmain1.example.com'
+    db_name:                       'TEMP'
+    size_db:                       '50'
+    version:                       '19.24'
+    mail_address:                  'team@example.com'
+    request_id:                    'RITM442185932'
+    userid:                        'tz1'
+    business_service:              'Example Shared Environment Service'
+    level_support:                 'Development'
+    action:                        'prepare'
+    itsm:                          'true'
+    pb_vc_hostname:                ''
+    pb_vc_cluster:                 ''
+    pb_vc_datacenter:              ''
+    fs_extended:                   1
+    linux_env_preparation:         1
+    validation_error:              1
+
+    # GitLab vars
+    usage:                         'Development'
+    branch_name_gitlab:            '$CI_COMMIT_BRANCH'
+    gitlab_url:                    '$CI_JOB_URL'
+
+    # ServiceNow vars
+    # NAMESPACE: PROD
+    # SNOW_ENVIRONMENT: 'TEST'
+    # USAGE: 'PROD'
+    SNOW_INC_NUMBER:               ''
+    SNOW_CATEGORY:                 'Installation'
+    SNOW_BUSINESS_SERVICE:         'Oracle DB Service'
+    cmdb_relation_usedby:          'b98ae9f8eba083007a9e0dffab887ere'
+    cmdb_relation_runson:          '60bc4e22c0a8010e01f074cbe6bd73c6'
+    cmdb_relation_impactservice:   'b98ae9f8eba083007a9e0dffab233eae'
+    cmdb_relation_dependson:       '3a9cb166f1571100a92eb60da1bce6c5'
+    db_app_service:                'Example Cloud Service'
+
+    pipeline_message:              ''
+    pipeline_error:                'false'
+    pipeline_error_message:        ''
+    no_change_number:              'N/A'
+    no_incident_number:            'N/A'
+
+  ################################# PIPELINE GLOBAL CONFIGURATION #######################################
+  workflow:
+    name: "Oracle deployment Service Activities"
+    rules:
+    # Environment parameters
+    - if: $CI_COMMIT_REF_NAME == "master" || $CI_COMMIT_TAG
+      variables:
+        SNOW_ENVIRONMENT: 'PROD'
+        SEND_MAIL: 'true'
+        JENKINS_JOB_ENV: 'jenkinsprd'
+    - if: $CI_COMMIT_REF_NAME != "master" && $TEST_RUN == "false"
+      variables:
+        SNOW_ENVIRONMENT: 'TEST'
+        SEND_MAIL: 'false'
+        JENKINS_JOB_ENV: 'jenkinsnonprd'
+    - if: $TEST_RUN == "true"
+      variables:
+        SNOW_ENVIRONMENT: 'TEST'
+        SEND_MAIL: 'true'
+        JENKINS_JOB_ENV: 'jenkinsnonprd'
+    - if: $level_support == "Sandpit"
+      variables:
+        nologic_monitor: 'true'
+    - if: $action == "full"
+      variables:
+        prepare: 'true'
+        sw: 'true'
+        bd: 'true'
+    - if: $action == "prepare"
+      variables:
+        prepare: 'true'
+        sw: 'false'
+        bd: 'false'
+    - if: $action == "installsw"
+      variables:
+        prepare: 'false'
+        sw: 'true' 
+        bd: 'false'
+    - if: $action == "createdb"
+      variables:
+        prepare: 'false'
+        sw: 'false'
+        bd: 'true'
+        
+
+  stages:
+  - validate_input
+  - launch_oracle_environment_preparation
+  - test_environment_preparation
+  - oracle_software_install
+  - test_oracle_soft_install
+  - oracle_db_create
+  - test_oracle_db_create
+  - oracle_db_create_update_ci
+  - test_ci_create_update
+  - oracle_create_ci_relations
+  - change_create_update_close_successful
+  - oracle_email_notification
+  - validate_execution_error_mesg
+  - change_create_update_close_failure
+  - create_incident
+  - oracle_email_notification_failure
+  - get_artifacts
+  
+################################# PIPELINE STAGES ######################################################
+  Validate :
+    stage: validate_input
+    image: registry.example.com/caas/caas-runner-images/itsm-integration-runner:1.0.2
+    id_tokens:
+      VAULT_ID_TOKEN:
+        aud: https://code.example.com
+    secrets:
+      SNOW_USERNAME:
+        vault: SNOW/username@keyvault
+        file: false
+      SNOW_PASSWORD:
+        vault: SNOW/password@keyvault
+        file: false
+      MULESOFT_ID:
+        vault: SNOW/mulesoft_id@keyvault
+        file: false
+      MULESOFT_SECRET:
+        vault: SNOW/mulesoft_secret@keyvault
+        file: false
+      GITLAB_API_KEY:
+        vault: GITLAB/api_key@keyvault
+        file: false
+      SNOW_SOURCESYSTEMID:
+        vault: SNOW/sourcesystemid@keyvault
+        file: false
+    script:
+      - set -x
+      - export failed_fields=""
+      - export snow_desc='Incorrect Input Values for fields ->'
+      - touch build.env
+      - source ./scripts/validate_checks_functions.sh
+      - declare -a failed_fields=()
+      - snow cmdb get_ci_details -c ${server} --env="${SNOW_ENVIRONMENT}" --mulesoft_id ${MULESOFT_ID} --mulesoft_secret ${MULESOFT_SECRET} --username ${SNOW_USERNAME} --password ${SNOW_PASSWORD} --sourcesystemid ${SNOW_SOURCESYSTEMID}| jq ".result[].cmdb_ci.payload" | tr -d '"'  > temp.xml
+      - echo "<payload>" > ./temp2.xml ; cat temp.xml >> temp2.xml ; echo "</payload>" >> temp2.xml
+      - os_majorversion=$(python -c 'from xml.dom import minidom ; xmldoc = minidom.parse("temp2.xml") ; print(xmldoc.getElementsByTagName("os_version")[0].firstChild.nodeValue)' | cut -d. -f1)
+      - echo $os_majorversion
+      - if [ $action = "prepare" ]; then
+      -   echo "Action called -> prepare"
+      -   check_business_service
+      -   check_server
+      -   check_db_name
+      -   check_size_db
+      -   check_level_support
+      -   check_os_majorversion
+      - elif [  $action = "installsw" ]; then
+      -   echo "Action called -> installsw"
+      -   check_business_service
+      -   check_server
+      -   check_version
+      -   check_os_majorversion
+      - elif [  $action = "full" ]; then
+      -   echo "Action called -> full"
+      -   check_business_service
+      -   check_server
+      -   check_db_name
+      -   check_size_db
+      -   check_level_support
+      -   check_version
+      -   check_os_majorversion
+      - elif [  $action = "createdb" ]; then
+      -   echo "Action called -> createdb"
+      -   check_business_service
+      -   check_server
+      -   check_db_name
+      -   check_version
+      -   check_level_support
+      -   check_os_majorversion
+      - else
+      -   echo "action input failure -> adding to failed fields"
+      -   failed_fields+=("action")
+      - fi
+      - if [ $os_majorversion = "9" ]; then
+      -   check_version_for_rhel9
+      - fi
+      - if [[ ${#failed_fields[@]} -ge 1 ]]; then
+      -   failed_fields_save=""
+      -   if [[ ${#failed_fields[@]} -eq 1 ]]; then   
+      -     failed_fields=$(echo $failed_fields | xargs) 
+      -     echo failed_fields=$failed_fields >> build.env 
+      -   else 
+      -    for i in "${failed_fields[@]}"; do
+      -      failed_fields_save="$failed_fields_save $i"
+      -    done
+      -    failed_fields_save=$(echo $failed_fields_save | xargs) 
+      -    echo $failed_fields_save
+      -    echo failed_fields=$failed_fields_save >> build.env
+      -   fi 
+      -   echo validation_error=0 >> build.env
+      -   exit 2
+      - fi
+      - echo os_majorversion=$os_majorversion >> build.env
+    artifacts:
+      reports:
+        dotenv: build.env
+    retry: 2
+    allow_failure: false
+
+  launch_oracle_environment_preparation:
+    stage: launch_oracle_environment_preparation
+    id_tokens:
+      VAULT_ID_TOKEN:
+        aud: https://code.example.com
+    secrets:
+      api_database_user:
+        vault: GITLAB/api_database_user@keyvault
+        file: false
+      api_database_password:
+        vault: GITLAB/api_database_password@keyvault
+        file: false
+      api_jenkins_user:
+        vault: JENKINS_APIUSER/${JENKINS_JOB_ENV}/api_jenkins_user@keyvault
+        file: false
+      api_jenkins_token:
+        vault: JENKINS_APIUSER/${JENKINS_JOB_ENV}/api_jenkins_token@keyvault
+        file: false
+      PULL_DATABASE_TOKEN:
+        vault: GITLAB/pull_database_token@keyvault
+        file: false
+    before_script:
+      - git config --global credential.helper "store --file ~/.git-credentials"
+      - echo "https://gitlab-ci-token:$CI_JOB_TOKEN@code.example.com" > ~/.git-credentials
+      - git config --global credential.helper store
+    script:
+      - set -x
+      - echo $action
+      - echo $prepare
+      - echo $sw
+      - echo $bd
+      - echo $linux_env_preparation
+      - echo $fs_extended 
+      - echo $level_support
+      - git clone https://code.example.com/cir/jenkins-launcher.git
+      - |
+        python ./jenkins-launcher/launch_jenkins/launch_jenkins.py \
+          -q \
+          --dump \
+          -j "https://${JENKINS_JOB_ENV}.dcmain2.example.com/job/LINUX/job/JenkinsPipelineEnvPrepOracle/view/tags/job/${oracle_env_prep_version}/" \
+          -u "${api_jenkins_user}" \
+          -t "${api_jenkins_token}" \
+          prep_role_version="${prep_role_version}" \
+          server="${server}" \
+          db_name="${db_name}" \
+          size_db="${size_db}" \
+          version="${version}" \
+          request_id="${request_id}" \
+          mail_address="${mail_address}" \
+          userid="${userid}" \
+          business_service="\"${business_service}\"" \
+          db_usage="noprod" \
+          pb_vc_hostname="" \
+          pb_vc_cluster="" \
+          pb_vc_datacenter="" \
+          role_manage_filesystem_version="${role_manage_fs_version}" \
+          > api_jenkins_job_output.txt | true
+      # - echo -e '[GitLab Pipeline Status] Notified \nFinished:SUCCESS' > api_jenkins_job_output.txt
+      - cat api_jenkins_job_output.txt
+      - build_status=$(cat api_jenkins_job_output.txt | grep -oP "(?<=Finished:\ ).*" | tail -1)
+      - echo $build_status
+      - if  [  $build_status = "FAILURE" ]; then
+      -    echo "Linux environment has failed to be prepared"
+      -    echo linux_env_preparation=0 >> build.env
+      -    linux_env_preparation=0
+      - elif [  $build_status = "SUCCESS" ]; then
+      -    echo "Linux environment prepared successfully"
+      -    echo linux_env_preparation=1 >> build.env
+      -    linux_env_preparation=1
+      - elif  [  $build_status = "UNSTABLE" ]; then
+      -    echo "Linux environment prepared partially"
+      -    echo linux_env_preparation=1 >> build.env
+      -    linux_env_preparation=1
+      - else
+      -    echo "Linux environment has failed to be prepared and status is unknown"
+      -    echo error_env_preparation=true >> build.env;
+      -    exit 1;
+      - fi
+      - if [ $linux_env_preparation = 1 ]; then
+      -     domain=$(echo $server | cut -d'.' -f2-)
+      -     echo $domain
+      -     if [ $level_support = "Production" ]; then
+      -        nas_device=$(cat ./vars/nas_device_prod.tmp  | grep "$domain " | awk ' -F ";" { print $2}')
+      -     else
+      -        nas_device=$(cat ./vars/nas_device_noprod.tmp  | grep "$domain " | awk ' -F ";" { print $2}')
+      -     fi
+      -     echo $nas_device
+      -     if [  $nas_device = "cohesity" ]; then
+      -         echo " NFS not found or Cohesity"
+      -     else 
+      -       if [ -n "$nas_device" ]; then
+      -           curl -u $api_database_user:$api_database_password https://iacapi.example.com/v1/form/ahm-auto-manage-filesystem/submit -d "{\"fqdn\":\"$server\",\"user_action\":\"mounted\",\"mountpoint\":\"/ora_backup\",\"fs_owner\":\"oracle\",\"fs_group\":\"oinstall\",\"device\":\"$nas_device\",\"fs_type\":\"nfs\",\"mount_opts\":\"rw,bg,hard,intr,rsize%3D1048576,wsize%3D1048576,nosuid,nodev,proto%3Dtcp,vers%3D3,timeo%3D600,actimeo%3D0\",\"getit_requestor_id\":\"$userid\",\"getit_requestor_email\":\"team@example.com\",\"request_id\":\"$request_id\"}" > /tmp/curl.output
+      -           cat /tmp/curl.output
+      -           job_url=$(cat /tmp/curl.output | awk  -F ":" '{ print $2 }' | sed 's/.$//' )
+      -           echo $job_url
+      -           while true
+      -           do
+      -             status_curl_job=$(curl -u $api_database_user:$api_database_password https://iacapi.example.com/v1/status/$job_url | awk  -F ":" '{ print $2 }' | awk  -F , '{ print $1 }'| sed 's/\"//g' )
+      -             echo $status_curl_job
+      -             if  [  $status_curl_job = "FAILURE" ]; then
+      -                echo " FS has failed to be extended"
+      -                echo fs_extended=0 >> build.env
+      -                fs_extended="0"
+      -                break
+      -             fi
+      -             if  [  $status_curl_job = "SUCCESS" ]; then
+      -                echo "FS  extended"
+      -                echo fs_extended=1 >> build.env
+      -                fs_extended="1"
+      -                break
+      -             fi
+      -             if  [  $status_curl_job = "UNSTABLE" ]; then
+      -                echo "NFS  extended partially"
+      -                echo fs_extended=1 >> build.env
+      -                fs_extended="2"
+      -                break
+      -             fi
+      -             sleep 120
+      -           done
+      -       fi
+      -     fi
+      - fi
+      - if [ $linux_env_preparation = 0 ]; then
+      -   error_env_preparation='true'
+      -   echo error_env_preparation=true >> build.env
+      - fi
+      - if [ $fs_extended = 0 ]; then
+      -   error_nfs='true'
+      -   echo error_nfs=true >> build.env
+      - else
+      -  echo "NFS on DC1main or DC2main not needed due to is for Cohesity"
+      - fi    
+    rules:
+      - if: $action == "prepare" || $action == "full"
+    artifacts:
+      reports:
+        dotenv: build.env
+    retry: 2
+    # allow_failure: true
+
+  test_environment_preparation:
+    stage: test_environment_preparation
+    image: registry.example.com/calm/automated-testing/testcore-linux-image:BSE_1.1
+    script: 
+      - set -x
+      - echo "$server ansible_ssh_private_key_file=id_rsa ansible_user=oracle ansible_ssh_extra_args='-o StrictHostKeyChecking=no'" >> inventory
+      - echo "${database_key}" > ./id_rsa
+      - chmod 400 ./id_rsa
+      - pip install oracledb==3.4.2
+      - pip install strip-ansi
+      - pytest --hosts=$server  --force-ansible --hosts='ansible://all' --ansible-inventory=inventory --color=yes -v -W ignore::pytest.PytestExperimentalApiWarning --db_host $server --db_name $db_name --db_size $size_db --stage $CI_JOB_STAGE --pathdir "$CI_PROJECT_DIR" --os_version $os_majorversion --level_support $level_support --stage $CI_JOB_STAGE -o junit_family=legacy --junit-xml tests/reports/junit_$request_id.xml  tests/prepare
+      - testsrc=$?
+      - allure generate tests/reports
+      - echo error_env_preparation=$error_env_preparation >> build.env
+      - echo fs_extended=$fs_extended >> build.env
+      - echo linux_env_preparation=$linux_env_preparation >> build.env
+      - if [ $error_env_preparation == "true" ] || [ $fs_extended == "true" ] || [ $linux_env_preparation == "true" ] || [ $testsrc -gt 0 ]; then
+      -     exit 1
+      - fi
+    rules:
+      - if: $action == "prepare" ||  $action == "full"
+    artifacts:
+      when: always
+      paths:
+      - tests/reports
+      - allure-report
+      reports:
+        junit: tests/reports/*.xml
+        dotenv: build.env
+    dependencies:
+      - 'launch_oracle_environment_preparation'
+      - 'Validate'
+    when: always
+    allow_failure: true
+
+  Oracle Software Installation:
+    stage: oracle_software_install
+    id_tokens:
+      VAULT_ID_TOKEN:
+        aud: https://code.example.com
+    secrets:
+      PULL_DATABASE_TOKEN:
+        vault: GITLAB/pull_database_token@keyvault
+        file: false
+    before_script: 
+      - echo "${database_key}" > /root/id_rsa
+      - chmod 400 /root/id_rsa
+      - export ANSIBLE_HOST_KEY_CHECKING=False
+      - git config --global credential.helper "store --file ~/.git-credentials"
+      - echo "https://pull_database_token:${PULL_DATABASE_TOKEN}@code.example.com" > ~/.git-credentials
+      - git config --global credential.helper store
+    script:
+      - set -x
+      - echo $error_env_preparation
+      - echo $error_nfs      
+      - if [ $error_nfs = "false" ] && [ $error_env_preparation = "false" ]; then
+      -   echo "Checking for Python 3 on the target host..."
+      -   INTERPRETER="/usr/bin/python" 
+      -   if ssh -o StrictHostKeyChecking=no -i /root/id_rsa oracle@pytestsrv.dcmain2.example.com "test -f /usr/bin/python3"; then
+      -       echo "Python 3 found. Using /usr/bin/python3"
+      -       INTERPRETER="/usr/bin/python3"
+      -   else
+      -       echo "Python 3 not found. Using /usr/bin/python"
+      -   fi
+      -   ansible-galaxy install -r requirements.yml -f -p ./ansible
+      -   ansible-playbook ./ansible/ansible-playbook_oracle_soft_install/tasks/main.yml   -u "$SSH_USERNAME" --private-key /root/id_rsa -i $server, --ssh-common-args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" --extra-vars "version=$version db_server=$server ansible_python_interpreter=$INTERPRETER"
+      -   if grep -q "ORACLE DATABASE SOFTWARE SUCCESSFULLY INSTALLED" ./ansible/ansible-playbook_oracle_soft_install/tasks/oracle_soft_install_${version}.out; then
+      -     echo "SW installtion completed succssfully"
+      -     echo "SUCCESSFULLY" >> $CI_PROJECT_DIR/oracle_check_${db_name}.out 
+      -     echo error_db_sw='false' >> build.env
+      -   else
+      -     echo "Soft installation failed"
+      -     error_db_sw='true'
+      -     echo error_db_sw='true' >> build.env
+      -   fi
+      - else
+      -   echo "Soft installation skipped"
+      -   echo skipped_db_sw='true' >> build.env
+      - fi
+    after_script:
+      - set -x
+      - ls -altr ./ansible/ansible-playbook_oracle_soft_install/
+      - if ! grep -q "SUCCESSFULLY" $CI_PROJECT_DIR/oracle_check_${db_name}.out; then
+      -   echo "Oracle Software installation failed - Out of space or server not reachable"
+      -   echo "Soft installation failed" 
+      -   echo error_db_sw='true' >> build.env
+      - fi
+    rules:
+      - if: $action == "full" || $action == "installsw"
+    artifacts:
+      paths:
+        - oracle_check_${db_name}.out  
+      reports:
+        dotenv: build.env
+    retry: 2
+    # allow_failure: true
+
+  Test Oracle Software Installation:
+    stage: test_oracle_soft_install
+    image: registry.example.com/calm/automated-testing/testcore-linux-image:BSE_1.1
+    dependencies:
+      - 'Oracle Software Installation'
+    script: 
+      - set -x
+      - pip install oracledb==3.4.2
+      - pip install strip-ansi
+      - if [ $error_nfs = "false" ] && [ $error_db_sw = "false" ] && [ $error_env_preparation = "false" ] && [ ! -z $db_name ]; then
+      -   pytest --color=yes -v --db_host $server --db_name $db_name  --pathdir "$CI_PROJECT_DIR" --level_support $level_support --stage $CI_JOB_STAGE -o junit_family=legacy -W ignore::pytest.PytestExperimentalApiWarning --junit-xml tests/reports/junit_$request_id.xml tests/
+      - else 
+      -   pytest --color=yes -v --pathdir "$CI_PROJECT_DIR" --level_support $level_support --db_host $server --stage $CI_JOB_STAGE -o junit_family=legacy -W ignore::pytest.PytestExperimentalApiWarning --junit-xml tests/reports/junit_$request_id.xml tests/
+      - fi
+      - allure generate tests/reports
+    rules:
+      - if: $action == "full" || $action == "installsw"
+    artifacts:
+      when: always
+      paths:
+      - tests/reports
+      - allure-report
+      reports:
+        junit: tests/reports/*.xml
+    allow_failure: true
+
+  Oracle Database Creation:
+    stage: oracle_db_create
+    id_tokens:
+      VAULT_ID_TOKEN:
+        aud: https://code.example.com
+    secrets:
+      PULL_DATABASE_TOKEN:
+        vault: GITLAB/pull_database_token@keyvault
+        file: false
+    before_script: 
+      - echo "${database_key}" > /root/id_rsa
+      - chmod 400 /root/id_rsa
+      - export ANSIBLE_HOST_KEY_CHECKING=False
+      - git config --global credential.helper "store --file ~/.git-credentials"
+      - echo "https://pull_database_token:${PULL_DATABASE_TOKEN}@code.example.com" > ~/.git-credentials
+      - git config --global credential.helper store
+      - |- 
+          if [[ $level_support == "Production" ]]; then
+            level_support_status='prod'
+          fi
+    script:
+      - set -x
+      - echo $error_nfs
+      - echo $error_db_sw
+      - echo $error_env_preparation
+      - if  [ $error_nfs = "false" ] && [ $error_db_sw = "false" ] && [ $error_env_preparation = "false" ]; then
+      -   ansible-galaxy install -r requirements.yml -f -p ./ansible
+      -   ansible-playbook ./ansible/ansible-playbook_oracle_db_create/tasks/main.yml -u "$SSH_USERNAME" --private-key /root/id_rsa -i $server,  --ssh-common-args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+          --extra-vars "version=${version}
+          dbname=${db_name}
+          level_supp=${level_support_status}
+          ora_username=${ora_username}
+          ora_password=${ora_password}
+          lmpassword=${lmpassword}
+          mail_address=${mail_address}"
+      -   if grep -q "DATABASE ALREADY EXISTS" ./ansible/ansible-playbook_oracle_db_create/tasks/dbexists_${db_name}.out; then    
+      -         echo "Database Already exists"
+      -         echo "SUCCESSFULLY" >> $CI_PROJECT_DIR/oracle_check_${db_name}.out
+      -         echo error_db_exist='true' >> build.env
+      -         echo success_db_creation='true' >> build.env
+      -   else
+      -     if grep -q "DATABASE SUCCESSFULLY CREATED" ./ansible/ansible-playbook_oracle_db_create/tasks/oracle_db_create_${db_name}.out; then
+      -       echo "Database successfully Created"
+      -       echo "SUCCESSFULLY" >> $CI_PROJECT_DIR/oracle_check_${db_name}.out
+      -       snow_port=$(cat ./ansible/ansible-playbook_oracle_db_create/tasks/port_${db_name}.out)
+      -       echo success_db_creation='true' >> build.env
+      -       echo snow_port=$snow_port >> build.env
+      -       echo $snow_port > $CI_PROJECT_DIR/port_${db_name}.out
+      -     else
+      -       echo "Database creation failed"
+      -       error_db_creation='true'
+      -       echo error_db_creation=true >> build.env
+      -     fi #successfukllt
+      -   fi  # already exists         
+      - fi # first if [ $error_nfs = "false" ] && [ $error_db_sw = "false" ] && [ $error_env_preparation = "false" ]; then
+    after_script: 
+      - set -x 
+      - ls ./ansible/ansible-playbook_oracle_db_create/tasks/
+      - if [ -e "./ansible/ansible-playbook_oracle_db_create/tasks/oracle_db_not_create_${db_name}.out" ]; then
+      -   echo "Oracle New DB creation is failed. Server ${server} is reaching the maximum \# of allowed DB's. New VM to be requested."
+      -   echo error_db_creation=true >> build.env
+      -   echo error_db_creation_nospace=true >> build.env
+      - fi
+      - scp -i /root/id_rsa -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${SSH_USERNAME}@${server}:/opt/oracle/admin/backup/config/${db_name}.cfg ${db_name}.cfg || true
+      - if [ ! -f ${db_name}.cfg ]; then
+      -     touch ${db_name}.cfg
+      - fi
+      - chmod 664 ${db_name}.cfg
+      - cat ${db_name}.cfg
+    rules:
+      - if: $action == "createdb" || $action == "full"
+    artifacts:
+      paths:
+        - oracle_check_${db_name}.out
+        - port_${db_name}.out
+        - ${db_name}.cfg
+      reports:
+        dotenv: build.env
+    retry: 2
+    # allow_failure: true
+
+
+  Test Oracle Database Creation:
+    stage: test_oracle_db_create
+    image: registry.example.com/calm/automated-testing/testcore-linux-image:BSE_1.1
+    dependencies:
+      - 'Oracle Database Creation'
+    script:
+      - port=$snow_port
+      - echo $port
+      - pip install oracledb==3.4.2
+      - pip install strip-ansi
+      - if [ $error_nfs = "false" ] && [ $error_db_sw = "false" ] && [ $error_env_preparation = "false" ]; then
+      -   pytest --color=yes -v --db_name $db_name --db_host $server --db_port $port --pathdir "$CI_PROJECT_DIR" --level_support $level_support --stage $CI_JOB_STAGE -o junit_family=legacy -W ignore::pytest.PytestExperimentalApiWarning --junit-xml tests/reports/junit_$request_id.xml tests/
+      -   allure generate tests/reports    
+      - else
+      -   echo "Database Creation installation skipped no Tests Needed"
+      - fi    
+    rules:
+      - if: $action == "createdb" || $action == "full"
+    artifacts:
+      when: always
+      paths:
+      - tests/reports
+      - allure-report
+      reports:
+        junit: tests/reports/*.xml
+    allow_failure: true
+
+  # create ci relations
+
+  include:
+    - project: 'databases/itsm-snow-db-lib'
+      branch: 'master'
+      file: 'snow-template.yml'
+
+  Create or update CI:
+    stage: oracle_db_create_update_ci
+    extends: .snow_create_update_ci
+    image: registry.example.com/caas/caas-runner-images/itsm-integration-runner:1.0.2
+    variables:
+      CI_NAME: ${db_name}@${server}
+      SNOW_BUSINESS_SERVICE: "Oracle DB Service"
+      OPERATIONAL_STATUS: "1"
+      PAYLOAD_CLUSTER: "{ \"version\": \"${version}\" ,\"sid\": \"${db_name}\" , \"environment\": \"${level_support}\", \"u_qualified\": \"true\", \"tcp_port\": \"${snow_port}\", \"serial_number\": \"${snow_port}\"}"
+      SYS_CLASS_NAME: "cmdb_ci_db_ora_instance"
+      LOCATION: "GLOBAL"
+      SNOW_ASSIGNMENT_GROUP: ""
+      SNOW_SOURCESYSTEMID: "source-system-teamsnow"
+    script:
+      - |
+        # Enable debug
+        set -x
+
+        # Check if CI already exists
+        snow cmdb resolve_ci_name --env=${SNOW_ENVIRONMENT} -c "${CI_NAME}" | tee get-sys-id.json
+        SNOW_CMDB_CI_SYS_ID=$(cat get-sys-id.json | jq ".result.ci_definition[0].sys_id")
+
+        if [ "$SNOW_CMDB_CI_SYS_ID" = "null" ]; then # If cmdb ci sys id is not provided, it means ci does not exist, we create it with the desired ci name
+          snow cmdb create_update_ci --env=${SNOW_ENVIRONMENT} \
+                                    --model_id="${MODEL_ID}" \
+                                    --operational_status=${OPERATIONAL_STATUS} \
+                                    --owning_service="${SNOW_BUSINESS_SERVICE}" \
+                                    --support_service="${SNOW_ASSIGNMENT_GROUP}" \
+                                    --payload="${PAYLOAD_CLUSTER}" \
+                                    --sys_class_name="${SYS_CLASS_NAME}" \
+                                    --location="${LOCATION}" \
+                                    --ci_name="${CI_NAME}" \
+                                    | tee new-ci.json
+          SNOW_CMDB_CI_SYS_ID=$(cat new-ci.json | jq ".result.sys_id")
+        else
+          # If cmdb ci sys id is provided, it means ci already exists, we update it
+          snow cmdb create_update_ci --env=${SNOW_ENVIRONMENT} \
+                                    --model_id="${MODEL_ID}" \
+                                    --operational_status=${OPERATIONAL_STATUS} \
+                                    --owning_service="${SNOW_BUSINESS_SERVICE}" \
+                                    --support_service="${SNOW_ASSIGNMENT_GROUP}" \
+                                    --payload="${PAYLOAD_CLUSTER}" \
+                                    --sys_class_name="${SYS_CLASS_NAME}" \
+                                    --location="${LOCATION}" \
+                                    --sys_id="${SNOW_CMDB_CI_SYS_ID}" 
+        fi
+      - |
+        # Save sysid as env variable
+        echo "SNOW_CMDB_CI_SYS_ID=${SNOW_CMDB_CI_SYS_ID}" >> build.env 
+      - snow cmdb get_ci_details -c ${db_name}@${server} --env=${SNOW_ENVIRONMENT} --mulesoft_id $MULESOFT_ID --mulesoft_secret $MULESOFT_SECRET --username $SNOW_USERNAME --password $SNOW_PASSWORD --sourcesystemid $SNOW_SOURCESYSTEMID | jq '.result[].cmdb_ci.payload' | tr -d '"' > /tmp/tmp_file
+      - echo "<payload>" > /tmp/tmp_file2 ; cat /tmp/tmp_file >> /tmp/tmp_file2 ; echo "</payload>" >> /tmp/tmp_file2  
+      - mv /tmp/tmp_file2 $CI_PROJECT_DIR/ci_payload_info_${db_name}.xml 
+    rules:
+      - if: $action == "createdb" || $action == "full"    
+    artifacts:
+      when: always
+      paths:
+      - $CI_PROJECT_DIR/ci_payload_info_${db_name}.xml
+      reports:
+        dotenv: build.env  
+    needs: ["Oracle Database Creation"]
+    retry: 2
+
+  Test CI:
+    stage: test_ci_create_update
+    image: registry.example.com/calm/automated-testing/testcore-linux-image:BSE_1.1
+    dependencies:
+      - 'Create or update CI'
+    script:
+      - pip install oracledb==3.4.2
+      - pip install strip-ansi
+      - if [ $error_nfs = "false" ] && [ $error_db_sw = "false" ] && [ $error_env_preparation = "false" ]; then
+      -   pytest --color=yes -v --db_name $db_name --db_host $server --pathdir "$CI_PROJECT_DIR" --level_support $level_support --stage $CI_JOB_STAGE -o junit_family=legacy -W ignore::pytest.PytestExperimentalApiWarning --junit-xml tests/reports/junit_$request_id.xml tests/
+      -   allure generate tests/reports    
+      - else
+      -   echo "Database Creation installation skipped no Tests Needed"
+      - fi  
+    rules:
+      - if: $action == "createdb" || $action == "full"
+    artifacts:
+      when: always
+      paths:
+      - tests/reports
+      - allure-report
+      reports:
+        junit: tests/reports/*.xml
+    allow_failure: true
+
+
+  Create, update upstream relations:
+    stage: oracle_create_ci_relations
+    extends: .snow_create_update_relation_uppstream
+    image: registry.example.com/caas/caas-runner-images/itsm-integration-runner:1.0.2
+    variables:
+      REL_TYPE: ${cmdb_relation_impactservice}
+      SNOW_BUSINESS_SERVICE_CLASS_NAME: "cmdb_ci_service_auto"
+      SNOW_BUSINESS_SERVICE: ${business_service}
+    rules:
+      - if: $action == "createdb" || $action == "full" 
+    retry: 2
+    needs: ["Create or update CI", "Oracle Database Creation"]
+    # allow_failure: true
+
+
+  Create, update downstream relations:
+    stage: oracle_create_ci_relations
+    extends: .snow_create_update_relation_downstream
+    image: registry.example.com/caas/caas-runner-images/itsm-integration-runner:1.0.2
+    variables:
+      REL_TYPE: ${cmdb_relation_runson} 
+      SNOW_BUSINESS_SERVICE_CLASS_NAME: "cmdb_ci_linux_server"
+      SNOW_BUSINESS_SERVICE: ${server} 
+    retry: 2
+    needs: ["Create or update CI", "Oracle Database Creation"]
+    rules:
+      - if:  $action == "createdb" || $action == "full" 
+    # allow_failure: true
+
+  Change create, update and close successful:
+    stage: change_create_update_close_successful
+    extends: .snow-open-update-and-close-successful
+    image: registry.example.com/caas/caas-runner-images/itsm-integration-runner:1.0.2
+    variables:
+      SNOW_ASSIGNMENT_GROUP: "INFRA Data Stores Level 3 Support"
+      SNOW_REQUESTEDBY: "${userid}"
+      SNOW_SHORT_DESC: "This change is to document a Oracle Deployment. Oracle new DB creation was successful"
+      SNOW_DESC: "Oracle DB Deployment: DB Name: ${db_name} Server - ${server} \n \n  Gitlab Url: ${gitlab_url} \n \n pipeline_parameters: \n  \t playbook=oracle_db_create \n \t mail_address=${mail_address} \n  \t db_name=${db_name} \n \t server=${server} \n \t version=${version}  \n \t request_id=${request_id} \n \t business_service=${business_service}"
+      SNOW_CATEGORY: "Installation"
+      SNOW_BUSINESS_SERVICE: "Oracle DB Service"
+    script:
+      - set -x
+      - echo "The branch calling the library is '$CI_COMMIT_REF_NAME'"
+      - echo "IMPORTANT, this change will be opened in the environment '$SNOW_ENVIRONMENT'"
+      - |
+        if [ -z "$SNOW_CMDB_CI_SYS_ID" ]; then
+        # If means CI was created/taken - so it is pipeline run
+        # with default parameters, so most probably during merge request 
+          snow cmdb resolve_ci_name --env=${SNOW_ENVIRONMENT} -c "${default_db_name}@${default_server}" | tee get-sys-id.json
+          SNOW_CMDB_CI_SYS_ID=$(cat get-sys-id.json | jq ".result.ci_definition[0].sys_id")
+          snow change create --env=${SNOW_ENVIRONMENT} \
+                            --assignment_group="$SNOW_ASSIGNMENT_GROUP" \
+                            --requestedby="$SNOW_REQUESTEDBY" \
+                            --short_description="$SNOW_SHORT_DESC" \
+                            --description="$SNOW_DESC" \
+                            --category="$SNOW_CATEGORY" \
+                            --business_service="$SNOW_BUSINESS_SERVICE" \
+                            --cmdb_ci="${SNOW_CMDB_CI_SYS_ID}" \
+                            | tee new-cr.json
+        else
+          snow change create --env=${SNOW_ENVIRONMENT} --assignment_group="$SNOW_ASSIGNMENT_GROUP" --requestedby="$SNOW_REQUESTEDBY" --short_description="$SNOW_SHORT_DESC" --description="$SNOW_DESC" --category="$SNOW_CATEGORY" --business_service="$SNOW_BUSINESS_SERVICE" --cmdb_ci="$SNOW_CMDB_CI_SYS_ID" | tee new-cr.json
+        fi
+      - CR_NUMBER=$(cat new-cr.json | jq ".result.number")
+      - 'JOB_LOGS_IDS=`curl --location --header "PRIVATE-TOKEN: ${GITLAB_API_KEY}" "https://code.example.com/api/v4/projects/${CI_PROJECT_ID}/pipelines/${CI_PIPELINE_ID}/jobs"  | jq " .[].id"`' # Get pipeline job ids
+      - 'JOB_LOGS_IDS=$(echo $JOB_LOGS_IDS | xargs -n1 | sort | xargs)' # order logs
+      - |
+        for id in ${JOB_LOGS_IDS}
+        do
+          URL="https://code.example.com/api/v4/projects/${CI_PROJECT_ID}/jobs/$id/trace"
+          curl --location --header "PRIVATE-TOKEN: ${GITLAB_API_KEY}" ${URL} >> log_file.txt
+        done
+      - snow change update --number=${CR_NUMBER} --comment="${SNOW_COMMENT}" --worknote="${SNOW_WORKNOTE}" --attachment=@log_file.txt --env=${SNOW_ENVIRONMENT} 
+      - snow change close --env=${SNOW_ENVIRONMENT}  --number=${CR_NUMBER} --close-code="${SNOW_CLOSE_CODE}" --close-notes="${SNOW_CLOSE_NOTES}"
+      - echo "CR_NUMBER=${CR_NUMBER}" >> build.env
+    retry: 2
+    artifacts:
+      reports:
+        dotenv: build.env  
+    when: on_success
+
+  Communicate Oracle Deployment Success:
+    stage: oracle_email_notification
+    id_tokens:
+      VAULT_ID_TOKEN:
+        aud: https://code.example.com
+    secrets:
+      PULL_DATABASE_TOKEN:
+        vault: GITLAB/pull_database_token@keyvault
+        file: false
+    before_script:
+      - git config --global credential.helper "store --file ~/.git-credentials"
+      - echo "https://pull_database_token:${PULL_DATABASE_TOKEN}@code.example.com" > ~/.git-credentials
+      - git config --global credential.helper store
+    script:
+      - set -x
+      - ansible-galaxy install -r requirements.yml -f -p ./ansible
+      - cd ./ansible
+      - echo $itsm
+      - echo $error_nfs
+      - echo $bd
+      - echo $sw
+      - echo $snow_port
+      - if [ $itsm = "true" ] && [ $error_env_preparation = "false" ] && [ $error_nfs = "false" ] && [ $error_db_creation = "false" ] && [ $error_db_sw = "false" ] ; then
+      -   if [ $action = "createdb" ] || [ $action = "full" ]; then
+      -     snow_desc_mail="Oracle DB Deployment implemented successfully"    
+      -   fi
+      -   if [ $action = "installsw" ]; then
+      -     snow_desc_mail="Oracle DB Software Installation completed successfully"
+      -   fi    
+      -   if [ $action = "prepare" ]; then
+      -     snow_desc_mail="Oracle DB Preparation Environment implemented successfully"
+      -   fi        
+      -   if [ $error_db_exist = "true" ]; then
+      -     snow_desc_mail="Oracle DB already exists on the server"
+      -   fi        
+      - echo $snow_desc_mail
+      -   ansible-playbook -i localhost ./ansible-playbook-send-mail.yml
+          --extra-vars "requester=${mail_address}
+          getit_req=${request_id}
+          snow_req=${CR_NUMBER}
+          component=\"Oracle Db Deployment\"
+          status_email=success
+          team_email=${success_email_notification}
+          header_option=successful 
+          ci_name=${db_name}@${server}
+          snow_inc=${incident_id}
+          hostname=${server}
+          DbName=${db_name}
+          Port="N/A"
+          Environment=${level_support}
+          action="N/A"
+          oracle_version=${version}
+          snow_desc=\"${snow_desc_mail}\" "
+          --ssh-common-args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+      - fi
+    # rules:
+    #   - if: $action == "createdb" || $action == "full" || $action == "installsw" || $action == "prepare"
+    retry: 2
+    # allow_failure: true
+    when: on_success
+
+  Validating execution and error message on failure:
+    stage: validate_execution_error_mesg
+    before_script:
+      - if [[ ${validation_error} -eq 0 ]]; then
+      -   exit 0     
+      - fi
+    script:
+      - |
+        set -x
+        if [ $error_db_creation = "true" ] || [ $error_db_sw = "true" ] || [ $error_nfs = "true" ] || [ $error_env_preparation = "true" ]; then
+          if [ $error_nfs = "true" ]; then
+            work_notes="Please check with team. Review  GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            change_short_description="Oracle DB Deployment FS Creation failed"
+            # change_description="Oracle DB Deployment FS Creation Failed while preparing linux server."
+          elif [ $error_db_creation = "true" ]; then
+            work_notes="Please Review GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            change_short_description="Oracle DB Deployment Database Creation failed"
+            # change_description="Oracle DB Deployment Oracle Database Creation Failed"
+          elif [ $error_db_creation_nospace = "true" ]; then
+            work_notes="Please Review GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            change_short_description="Oracle DB Deployment Database Creation failed, Because server space is not enough to create new Database"
+            # change_description="Oracle DB Deployment Oracle Database Creation Failed"
+          elif [ $error_db_sw = "true" ]; then
+            work_notes="Please Review GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            change_short_description="Oracle DB Deployment Oracle Software Installation failed"
+            # change_description="Oracle DB Deployment Oracle Software Installation Failed"
+          elif [ $error_env_preparation = "true" ]; then
+            work_notes="Please Review GitLab Output - ${gitlab_url}. Fix and relaunch it again"
+            change_short_description="Oracle DB Deployment Linux environment preparation failed"
+            # change_description="Oracle DB Deployment Linux environment preparation Failed"
+          fi
+        else
+            work_notes="Oracle DB Deployment Failed please check error log in pipeline"
+            change_short_description="Oracle DB Deployment Failed"
+            change_description="Oracle DB Deployment Failed. please check the error logs and relaunch it."
+        fi
+        echo work_notes=$work_notes >> build.env
+        echo change_short_description=$change_short_description >> build.env
+        # echo change_description=$change_description >> build.env
+    #rules:
+    #  - if: $validation_error == "1"
+    artifacts:
+      reports:
+        dotenv: build.env  
+    when: on_failure
+
+  # <============== Failure handling part =====================>
+  Change create, update and close failure:
+    stage: change_create_update_close_failure
+    before_script:
+      - if [[ ${validation_error} -eq 0 ]]; then
+      -   exit 0     
+      - fi
+    extends: .snow-open-update-and-close-unsuccessful
+    variables:
+      SNOW_SHORT_DESC: ${change_short_description}
+      SNOW_DESC: "${change_short_description} \n Oracle DB Deployment \n DB Name: ${db_name} Server - ${server} \n \n  Gitlab Url: ${gitlab_url} \n \n pipeline_parameters:\n  \t playbook=oracle_db_create \n \t mail_address=${mail_address} \n  \t db_name=${db_name} \n \t server=${server} \n \t version=${version}  \n \t request_id=${request_id} \n \t business_service=${business_service}"
+      SNOW_WORKNOTE: ${work_notes}
+      SNOW_CLOSE_CODE: "unsuccessful"
+      SNOW_CLOSE_NOTES: 'The automation failed, please check attached logs.'
+    # rules:
+    #   - if: $action == "createdb" || $action == "full"
+    # needs: ["Validating execution and error message on failure"]
+    #rules:
+    #  - if: $validation_error == "1"
+    retry: 2
+    when: on_failure
+
+
+  Create ServiceNow incident:
+    stage: create_incident
+    extends: .snow-get-vault-values
+    script:
+      - |
+        set -x
+        # Enable debug
+        touch new-inc.json
+        # Create incident
+        if [ $error_db_creation = "true" ] || [ $error_db_sw = "true" ] || [ $error_nfs = "true" ] || [ $error_env_preparation = "true" ]; then
+          if [ $error_nfs = "true" ]; then
+            description="Oracle DB Deployment FS Creation Failed, Please check with team Review  GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            incident_short_description="Oracle Deployment FS Creation Failed"
+          elif [ $error_db_creation = "true" ]; then
+            description="Oracle DB Deployment Oracle Database Creation Failed, Please Review GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            incident_short_description="Oracle Deployment Database Creation Failed"
+          elif [ $error_db_creation_nospace = "true" ]; then
+            work_notes="Please Review GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            change_short_description="Oracle DB Deployment Database Creation failed, Because server space is not enough to create new Database"
+            # change_description="Oracle DB Deployment Oracle Database Creation Failed"
+          elif [ $error_db_sw = "true" ]; then
+            description="Oracle DB Deployment Oracle Software Installation Failed, Please Review GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            incident_short_description="Oracle Deployment Oracle Software Installation Failed"
+          elif [ $error_env_preparation = "true" ]; then
+            description="Oracle DB Deployment Linux environment preparation Failed, Please Review GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+            incident_short_description="Oracle Deployment Linux environment preparation Failed"
+          fi
+        else
+          description="Incident created on Oracle deployment pipeline failure. Contact team for more information Request ${request_id}"
+          incident_short_description="Oracle Deployment Pipeline failed."
+        fi
+        if [[ ${validation_error} -eq 0 ]]; then
+          description="Oracle DB Deployment Input Validation failed. Failed fields: ${failed_fields} .Please check with team Review GitLab Output - Url: ${gitlab_url} - Request ID - ${request_id}"
+          incident_short_description="Oracle Deployment Input Validation Failed"
+          export change_short_description="Incorrect Input Values for fields ->"
+          export change_short_description="$change_short_description $failed_fields"
+        fi
+        snow incident create_incident  --env="$SNOW_ENVIRONMENT" \
+                            --assignment_group="INFRA Data Stores Level 1 Support" \
+                            --short_description="${incident_short_description}" \
+                            --description="$description" \
+                            --category="Infrastructure" \
+                            --subcategory="Other" \
+                            --business_service="Oracle DB Service" \
+                            --caller_id="${userid}" \
+                            --impact="3" \
+                            --urgency="3" \
+                            --service_offering="Oracle DB - Bronze" \
+                              | tee new-inc.json
+        INC_NUMBER=$(cat new-inc.json | jq ".result.number")
+        echo "SNOW_INC_NUMBER=${INC_NUMBER}" >> build.env
+        # echo "email_short_description=$email_short_description" >> build.env
+        echo "change_short_description=$change_short_description" >> build.env
+    artifacts:
+      paths:
+        - ./new-inc.json
+      reports:
+        dotenv: build.env
+    retry: 2
+    when: on_failure
+
+  Communicate Oracle Deployment Failure:
+    stage: oracle_email_notification_failure
+    id_tokens:
+      VAULT_ID_TOKEN:
+        aud: https://code.example.com
+    secrets:
+      PULL_DATABASE_TOKEN:
+        vault: GITLAB/pull_database_token@keyvault
+        file: false
+    before_script:
+      - git config --global credential.helper "store --file ~/.git-credentials"
+      - echo "https://pull_database_token:${PULL_DATABASE_TOKEN}@code.example.com" > ~/.git-credentials
+      - git config --global credential.helper store
+    script:
+      - ansible-galaxy install -f -p ./ansible -r requirements.yml
+      - cd ./ansible
+      - |
+        set -x
+        # if [ $error_db_creation = "true" ] || [ $error_db_sw = "true" ] || [ $error_nfs = "true" ] || [ $error_env_preparation = "true" ]; then
+        ansible-playbook -i localhost ./ansible-playbook-send-mail.yml \
+          --extra-vars "requester=${mail_address} \
+          getit_req=${request_id} \
+          snow_req=${no_change_number} \
+          snow_desc=\"${change_short_description}. Please check with team.\" \
+          component=\"Oracle Db Deployment\" \
+          status_email=failure \
+          team_email=${error_email_notification} \
+          extra_email=${mail_address} \
+          header_option=info_only \
+          ci_name=${db_name}@${server} \
+          snow_inc=${SNOW_INC_NUMBER} \
+          hostname=${server} \
+          DbName=${db_name}" \
+          --ssh-common-args="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+        # fi
+    retry: 2
+    when: on_failure
+
+  #<=============== Create ServiceNow incident on overall failure ================>
+  # create_incident:
+  #   stage: create_incident_pipeline
+  #   extends: .snow_create_incident
+  #   variables:
+  #     SNOW_ASSIGNMENT_GROUP: 'INFRA Data Stores Level 3 Support'
+  #     SNOW_REQUESTEDBY: "$userid"
+  #     SNOW_SHORT_DESC: 'Incident created on Oracle new DB Instance. Contact team for more information Request $request_id'
+  #     SNOW_DESC: 'Incident created on Oracle new DB Instnace. Contact team for more information $gitlab_url'
+  #     SNOW_CATEGORY: 'Infrastructure'
+  #     SNOW_BUSINESS_SERVICE: 'OracleDB Service'
+  #     SNOW_IMPACT: '3'
+  #     SNOW_URGENCY: '3'
+  #     SNOW_OFFERING: 'Oracle DB - Bronze'
+  #     # SNOW_ENVIRONMENT: 'PROD'
+  #   retry: 2
+  #   allow_failure: true
+  #   when: on_failure
+
+  #<========================= Get artifacts ========================>
+  get_artifacts:
+    stage: get_artifacts
+    script:
+      - curl https://http-inputs-example.splunkcloud.com/services/collector/event
+            -H "Authorization:Splunk 07754C9E-4063-421D-BE7A-5F3BDB71B9EC"
+                -d '{
+                "index":"jenkins_artifact",
+                "sourcetype":"json:jenkins",
+                "event":{
+                  "pipeline_name":"Oracle Deployment Activity Automatic",
+                  "build_number":"$gitlab_url",
+                  "fail_error_message":"",
+                  "failure_error_code":"",
+                  "friendly_name":"Oracle Deployment Activity Automatic",
+                  "change":"$CR_NUMBER",
+                  "incident":"$SNOW_INC_NUMBER",
+                  "request_id":"$request_id",
+                  "requestor":"$userid",
+                  "host":"code.example.com"
+                  }
+                }'
+    retry: 2
+    allow_failure: true
+    when: always

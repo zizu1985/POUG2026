@@ -1,0 +1,9 @@
+---
+dependencies: []
+
+galaxy_info:
+ role_name: 'oracle_deployment'
+ author: 'Tomasz Ziss'
+ description: 'Oracle DB playbook for oracle new db installation'
+ company: 'example.com'
+ license: 'propietary'
