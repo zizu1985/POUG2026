@@ -1,0 +1,1 @@
+This is example of Oracle regression tests pipelines used for validating Oracle IaaS New Database deployment in environment.

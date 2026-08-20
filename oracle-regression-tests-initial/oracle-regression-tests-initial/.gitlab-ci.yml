@@ -1,0 +1,39 @@
+############################### DEFAULT KEYWORDS #######################################################
+default: 
+  image: registry.example.com/databases/databases-runner-images:2.14.8
+  tags:
+    - linux-amd64-m
+#########################################################################################################
+
+stages:
+  - read_csv
+  - runset1
+  - finalize
+
+read_csv:
+  stage: read_csv
+  image: registry.example.com/databases/databases-runner-images:2.14.8
+  script:
+    - pip install pandas
+    - python scripts/generateSet1.py
+  artifacts:
+    paths:
+      - pipeline_set1.yml
+
+runset1:
+  stage: runset1
+  trigger:
+    include:
+      - artifact: "pipeline_set1.yml"
+        job: read_csv
+    strategy: depend
+    
+
+# ---- Finalize ---
+final_step:
+  stage: finalize
+  script:
+    - echo "Time to run final tests "
+
+
+
